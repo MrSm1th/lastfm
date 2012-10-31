@@ -6,9 +6,9 @@ using System.Diagnostics;
 
 namespace lastfm
 {
-    public class Logger
+    public static class Logger
     {
-        Logger()
+        static Logger()
         {
             // Let's set up debugging, if we're in debug mode!
             #if DEBUG
@@ -25,53 +25,64 @@ namespace lastfm
 
         //DefaultTraceListener traceListener;
 
-        static Logger _instance;
+        //static Logger _instance;
         /// <summary>
         /// Gets the logger instance
         /// </summary>
-        public static Logger I
-        {
-            get
-            {
-                if (_instance == null) _instance = new Logger();
-                return _instance;
-            }
-        }
+        //public static Logger I
+        //{
+        //    get
+        //    {
+        //        if (_instance == null) _instance = new Logger();
+        //        return _instance;
+        //    }
+        //}
 
-        string GetTimestamp()
+        static string GetTimestamp()
         {
             return DateTime.Now.ToString();
         }
 
-        public void WriteEmptyLine()
+        public static void WriteEmptyLine()
         {
             Trace.WriteLine(string.Empty);
         }
 
-        public void LogMessage(string message)
+        public static void LogMessage(string message)
         {
             //Trace.TraceInformation(message);
-            var d = GetTimestamp();
-            Trace.WriteLine(message, d + " - " + "Message");
+            Trace.WriteLine(message, GetTimestamp() + " - " + "Message");
         }
 
-        public void LogMessage(string message, string category)
+        public static void LogMessage(object obj)
         {
-            var d = GetTimestamp();
-            Trace.WriteLine(message, d + " - " + category);
+            Trace.WriteLine(obj, GetTimestamp() + " - " + "Message");
         }
 
-        public void LogError(string error)
+        public static void LogMessage(string message, string category)
+        {
+            Trace.WriteLine(message, GetTimestamp() + " - " + category);
+        }
+
+        public static void LogMessage(object obj, string category)
+        {
+            Trace.WriteLine(obj, GetTimestamp() + " - " + category);
+        }
+
+        public static void LogError(string error)
         {
             //Trace.TraceError(error);
-            var d = GetTimestamp();
-            Trace.WriteLine(error, d + " - " + "Error");
+            Trace.WriteLine(error, GetTimestamp() + " - " + "Error");
         }
 
-        public void LogError(string error, string category)
+        public static void LogError(string error, string category)
         {
-            var d = GetTimestamp();
-            Trace.WriteLine(error, d + " - " + category);
+            Trace.WriteLine(error, GetTimestamp() + " - " + category);
+        }
+
+        public static void WriteLine(string message)
+        {
+            Trace.WriteLine(message);
         }
     }
 }

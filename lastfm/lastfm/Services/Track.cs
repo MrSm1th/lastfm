@@ -119,7 +119,7 @@ namespace lastfm.Services
             Artist = s.Artist;
             Title = s.Title;
             Duration = 0;
-            if (!string.IsNullOrEmpty(s.Duration)) int.TryParse(s.Duration, out _duration);
+            if (!string.IsNullOrEmpty(s.Duration)) long.TryParse(s.Duration, out _duration);
             Album = s.Album;
             Year = s.Year;
             IsChosenByUser = !s.IsRadioStream;
@@ -148,8 +148,8 @@ namespace lastfm.Services
         /// <summary>
         /// Gets or sets the track duration in milliseconds
         /// </summary>
-        public int Duration { get { return _duration; } set { _duration = value; } }
-        int _duration;
+        public long Duration { get { return _duration; } set { _duration = value; } }
+        long _duration;
 
         /// <summary>
         /// Gets or sets the track ordinal in album (if any)
@@ -167,6 +167,14 @@ namespace lastfm.Services
         /// Gets a link to the Last.fm page of the track
         /// </summary>
         public string LastFmUrl { get; private set; }
+
+        public TimeSpan NaturalDuration
+        {
+            get
+            {
+                return new TimeSpan(Duration * 10000);
+            }
+        }
 
         public Dictionary<string, string> GetParametersDictionary()
         {

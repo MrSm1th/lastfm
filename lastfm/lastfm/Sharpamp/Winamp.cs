@@ -155,7 +155,7 @@ namespace Daniel15.Sharpamp
                 // Raise the event
                 if (StatusChanged != null)
                 {
-                    Logger.I.LogMessage("status changed: " + _Status);
+                    Logger.LogMessage(_Status, "Status changed");
                     StatusChanged(this, new StatusChangedEventArgs(value));
                 }
             }
@@ -195,8 +195,8 @@ namespace Daniel15.Sharpamp
         /// </summary>
         private void Init()
         {
-            Logger.I.WriteEmptyLine();
-            Logger.I.LogMessage("hWnd: " + _WinampWindow);
+            Logger.WriteEmptyLine();
+            Logger.LogMessage("hWnd: " + _WinampWindow);
 
             // Start with a blank "currently playing" song
             CurrentSong = new WinampSong();
@@ -219,7 +219,7 @@ namespace Daniel15.Sharpamp
             GC.KeepAlive(_WinampWndProc);
             // Let's go ahead and set the new one, saving the old one
             _OldWinampWndProc = Win32.SetWindowLong(_WinampWindow, Win32.GWL_WNDPROC, _WinampWndProc);
-            Logger.I.LogMessage("Subclassed Winamp window (old proc = " + _OldWinampWndProc + ", new proc = " + _WinampWndProc + ")");
+            Logger.LogMessage("Subclassed Winamp window (old proc = " + _OldWinampWndProc + ", new proc = " + _WinampWndProc + ")");
         }
 
         /// <summary>
@@ -264,7 +264,7 @@ namespace Daniel15.Sharpamp
                             //else if (repeatCount == 1) repeatCount = 0;
                             //else repeatCount++;
                         }
-                        Logger.I.LogMessage("status change msg");
+                        //Logger.LogMessage("status change msg");
                         Status = status;
                     }
                     //else if (wParam == 6)
@@ -314,7 +314,7 @@ namespace Daniel15.Sharpamp
         /// <param name="command"></param>
         protected void SendCommand(Command command)
         {
-            Logger.I.LogMessage("Sending command " + command);
+            Logger.LogMessage("Sending command " + command);
             Win32.SendMessage(_WinampWindow, Win32.WM_COMMAND, (Int32)command, 0);
         }
 
@@ -384,18 +384,22 @@ namespace Daniel15.Sharpamp
             //Logger.Instance.LogMessage("Filename = " + filename);
 
             // Here's all our data.
-            bool hasMetadata = true;
+            bool hasMetadata = true, isStream = false;
             string playlistTitle = GetMetadata(filename, "title");
             string title = playlistTitle;
-            string artist = "";
-            string year = "";
-            string album = "";
-            string duration = "";
+            string artist = GetMetadata(filename, "artist");
+            string year = GetMetadata(filename, "year");
+            string album = GetMetadata(filename, "album");
+            string duration = GetMetadata(filename, "length");
+            string num = GetMetadata(filename, "track");
+            string bitrate = GetMetadata(filename, "bitrate");
+            string vbr = GetMetadata(filename, "vbr");
+            if (string.IsNullOrEmpty(duration)) isStream = true;
 
             // If the title is blank, we don't have any metadata :(
             // Better just get whatever Winamp gives us as the "title", and save
             // that.
-            if (String.IsNullOrEmpty(playlistTitle))
+            if (string.IsNullOrEmpty(artist) || string.IsNullOrEmpty(title)) //(String.IsNullOrEmpty(playlistTitle))
             {
                 playlistTitle = SendIPCCommandString(IPCCommand.GetTitle);
                 hasMetadata = false;
@@ -413,35 +417,41 @@ namespace Daniel15.Sharpamp
              */
             //if (CurrentSong.Title == playlistTitle || CurrentSong.StreamTitle == playlistTitle)
             if ((!filename.Contains("http://") && CurrentSong.Filename == filename) ||
-                (filename.Contains("http://") && CurrentSong.StreamTitle == playlistTitle))
+                (filename.Contains("http://") && CurrentSong.StreamTitle == playlistTitle) ||
+                playlistTitle.Contains("http://"))
             {
                 return;
             }
             // Get all our extra metadata, if we can
-            if (hasMetadata)
-            {
-                artist = GetMetadata(filename, "artist");
-                year = GetMetadata(filename, "year");
-                album = GetMetadata(filename, "album");
-                duration = GetMetadata(filename, "length");
-            }
+            //if (hasMetadata)
+            //{
+            //    artist = GetMetadata(filename, "artist");
+            //    year = GetMetadata(filename, "year");
+            //    album = GetMetadata(filename, "album");
+            //    duration = GetMetadata(filename, "length");
+            //}
             if (filename.Contains("http://")) // radio stream
             {
                 if (!hasMetadata || string.IsNullOrEmpty(title) || string.IsNullOrEmpty(artist))
                 {
-                    // strip out the station name (in parentheses)
-                    var streamName = Regex.Match(playlistTitle, @" (((?'Open'\()[^\(\)]*)+((?'Close-Open'\))[^\(\)]*)+)(?(Open)(?!))$");
-
-                    if (!string.IsNullOrEmpty(streamName.Value))
+                    var songTitle = playlistTitle;
+                    if (isStream)
                     {
-                        var songTitle = playlistTitle.Replace(streamName.Value, "");
-                        if (Regex.IsMatch(songTitle, @".* - .*"))
+                        // strip out text in parentheses at the end of string
+                        // which we believe to be a station name
+                        var streamName = Regex.Match(playlistTitle, @" (((?'Open'\()[^\(\)]*)+((?'Close-Open'\))[^\(\)]*)+)(?(Open)(?!))$");
+
+                        if (!string.IsNullOrEmpty(streamName.Value))
                         {
-                            var m = Regex.Match(songTitle, @"(.*) - (.*)");
-                            artist = m.Groups[1].Value;
-                            title = m.Groups[2].Value;
-                            hasMetadata = true;
+                            songTitle = playlistTitle.Replace(streamName.Value, "");
                         }
+                    }
+                    if (Regex.IsMatch(songTitle, @".* - .*"))
+                    {
+                        var m = Regex.Match(songTitle, @"(.*) - (.*)");
+                        artist = m.Groups[1].Value;
+                        title = m.Groups[2].Value;
+                        hasMetadata = true;
                     }
                 }
             }

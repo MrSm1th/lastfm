@@ -42,16 +42,18 @@ namespace lastfm.Services
         {
             public int? LastfmErrorCode { get; private set; }
             public string Message { get; private set; }
+            public Dictionary<string, string> RequestParameters { get; private set; }
 
             public RequestErrorEventArgs(string message)
             {
                 Message = message;
             }
 
-            public RequestErrorEventArgs(string message, int errorCode)
+            public RequestErrorEventArgs(string message, int errorCode, Dictionary<string, string> requestParameters)
             {
                 Message = message;
                 LastfmErrorCode = errorCode;
+                RequestParameters = requestParameters;
             }
         }
 
@@ -126,6 +128,9 @@ namespace lastfm.Services
                 isSsl = attr.IsSsl;
             }
 
+            Logger.WriteEmptyLine();
+            Logger.LogMessage(parameters["method"], "Request");
+
             var d = new SendRequestDelegate(SendRequest);
             return d.BeginInvoke(
                 parameters,
@@ -136,12 +141,13 @@ namespace lastfm.Services
                 {
                     var s = (SendRequestState)res.AsyncState;
                     var doc = s.Delegate.EndInvoke(res);
-                    Logger.I.LogMessage("Request: " + parameters["method"]);
-                    Logger.I.LogMessage("Last.fm response:");
-                    if (doc != null) Logger.I.LogMessage(doc.Document.ToString());
-                    if (doc != null && s.Callback != null) // no exceptions occured
+                    if (doc != null) // no exceptions occured
                     {
-                        s.Callback(doc);
+                        Logger.LogMessage(Environment.NewLine + doc.Document.ToString(), "Last.fm response");
+                        //Logger.LogMessage(doc.Document.ToString());
+
+                        if (s.Callback != null)
+                            s.Callback(doc);
                     }
                 }),
                 new SendRequestState(d, callback));
@@ -195,7 +201,7 @@ namespace lastfm.Services
             }
             catch (WebException ex)
             {
-                HandleWebException(ex);
+                HandleWebException(ex, parameters);
             }
 
             return doc;
@@ -222,7 +228,7 @@ namespace lastfm.Services
             }
             catch (WebException ex)
             {
-                HandleWebException(ex);
+                HandleWebException(ex, parameters);
             }
             catch (Exception ex)
             {
@@ -299,7 +305,7 @@ namespace lastfm.Services
             }
         }
 
-        static void HandleWebException(WebException ex)
+        static void HandleWebException(WebException ex, Dictionary<string, string> requestParameters)
         {
             if (ex.Response != null)
             {
@@ -310,19 +316,26 @@ namespace lastfm.Services
                     var xDoc = XDocument.Parse(responseBody);
                     var error = xDoc.Element("lfm").Element("error");
                     var errorCode = error.Attribute("code").Value;
-                    var errorValue = error.Value;
-                    Logger.I.LogError(string.Format("code {0} '{1}'", errorCode, errorValue), "Last.fm error");
-                    OnLastfmErrorOccured(new RequestErrorEventArgs(errorValue, int.Parse(errorCode)));
+                    var errorValue = error.Value.Trim();
+                    Logger.LogError(string.Format("code {0} '{1}'", errorCode, errorValue), "Last.fm error");
+                    OnLastfmErrorOccured(new RequestErrorEventArgs(errorValue, int.Parse(errorCode), requestParameters));
                     return;
                 }
                 catch
                 {
-                    Logger.I.LogMessage("Server response:" + Environment.NewLine + responseBody);
+                    Logger.LogMessage("Server response:" + Environment.NewLine + responseBody);
                 }
                 finally
                 {
-                    Logger.I.LogError(ex.ToString());
+                    var br = Environment.NewLine;
+                    var pStr = requestParameters.Aggregate("", (str, p) => str += string.Format("{0}: {1}{2}", p.Key, p.Value, br));
+                    Logger.LogMessage(br + pStr, "Request parameters");
+                    Logger.LogError(ex.ToString());
                 }
+            }
+            else
+            {
+                Logger.LogError(ex.ToString());
             }
 
             OnNetworkErrorOccured(new RequestErrorEventArgs(ex.Message));

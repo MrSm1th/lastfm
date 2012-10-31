@@ -27,13 +27,13 @@ namespace lastfm
         {
             scrobblingSettings = ScrobblingSettings.GetSettings();
 
-            Logger.I.LogMessage("Settings loaded");
+            Logger.LogMessage("Settings loaded");
 
             scrobbler = new Scrobbler(scrobblingSettings);
 
             SetEventHandlers();
 
-            Logger.I.LogMessage("plugin initialized");
+            Logger.LogMessage("plugin initialized");
         }
 
         public override void Config()
@@ -89,14 +89,14 @@ namespace lastfm
         {
             if (scrobbler.CurrentTrack != null)
             {
-                Logger.I.LogMessage("status changed handler");
+                //Logger.LogMessage("status changed handler");
                 if (e.Status == Status.Paused) scrobbler.PauseTimer();
                 else if (e.Status == Status.Playing) scrobbler.ResumeTimer();
                 else scrobbler.StopTimer(); // Status.Stopped
             }
             else
             {
-                Logger.I.LogMessage("scrobbler.CurrentTrack == null");
+                Logger.LogMessage("scrobbler.CurrentTrack == null");
             }
             //Logger.Instance.LogMessage(e.Status.ToString(), "Status");
             //System.Windows.Forms.MessageBox.Show(e.Status.ToString(), "Status");
@@ -104,18 +104,20 @@ namespace lastfm
 
         void Winamp_SongChanged(object sender, SongInfoEventArgs e)
         {
-            Logger.I.WriteEmptyLine();
-            Logger.I.LogMessage("Track changed");
+            Logger.WriteEmptyLine();
+            Logger.LogMessage("Track changed");
 
             //if (Winamp.Status != Status.Playing) return;
 
             if (!e.Song.HasMetadata)
             {
-                Logger.I.LogMessage(e.Song.Filename, "No metadata, exiting. File info");
+                Logger.LogMessage("No metadata available for playlist entry: " + e.Song.Filename);
                 return;
             }
 
             var track = new Track(e.Song);
+            //MessageBox.Show(string.Format("Current track: {0} [{1:m':'ss}]", track, track.NaturalDuration));
+
             if (track.Duration > 0)
             {
                 ShowTrackInfo(track);
@@ -141,14 +143,14 @@ namespace lastfm
                     }
                 }
                 else if (e.Song.IsRadioStream && !scrobblingSettings.TryToScrobbleRadio)
-                    Logger.I.LogMessage("Radio scrobbling disabled");
+                    Logger.LogMessage("Radio scrobbling disabled");
             }
         }
 
         void ShowTrackInfo(Track t)
         {
             var info = string.Format("{0} - {1}", t.Artist, t.Title);
-            Logger.I.LogMessage(info, "track data");
+            Logger.LogMessage(info, "Track data");
             info += string.Format("\nDuration: {0}", t.Duration);
             info += string.Format("\nAlbum: {0}", t.Album);
             info += string.Format("\nYear: {0}", t.Year);
@@ -160,7 +162,8 @@ namespace lastfm
         {
             if (e.LastfmErrorCode == 6 && (e.Message.Contains("Artist not found") || e.Message.Contains("Track not found")))
             {
-                Logger.I.LogError(e.Message + ": " + scrobbler.CurrentTrack);
+                //var trackInfo = string.Format("{0} - {1}", e.RequestParameters["artist"], e.RequestParameters["track"]);
+                //Logger.LogError(e.Message + ": " + trackInfo);
                 return;
             }
             var msg = e.Message + Environment.NewLine + "Press 'Cancel' to disable further notifications";

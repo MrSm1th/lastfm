@@ -65,11 +65,6 @@
     <Compile Include="Sharpamp\Winamp.cs" />
     <Compile Include="Util\Logger.cs" />
     <Compile Include="Util\Util.cs" />
-    <Compile Include="Translations.Designer.cs">
-      <AutoGen>True</AutoGen>
-      <DesignTime>True</DesignTime>
-      <DependentUpon>Translations.resx</DependentUpon>
-    </Compile>
     <Compile Include="WinampPlugin\ConfigForm.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -85,10 +80,6 @@
     <None Include="Properties\DataSources\ScrobblingSettings.datasource" />
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="Translations.resx">
-      <Generator>ResXFileCodeGenerator</Generator>
-      <LastGenOutput>Translations.Designer.cs</LastGenOutput>
-    </EmbeddedResource>
     <EmbeddedResource Include="WinampPlugin\ConfigForm.resx">
       <DependentUpon>ConfigForm.cs</DependentUpon>
     </EmbeddedResource>
@@ -96,8 +87,8 @@
   <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
-    <PostBuildEvent>copy "$(TargetDir)$(TargetFileName)" "C:\Program files\Winamp\"
-copy "$(TargetDir)$(TargetName).pdb" "C:\Program files\Winamp\"</PostBuildEvent>
+    <PostBuildEvent>copy "$(TargetDir)$(TargetFileName)" "D:\Program files\Winamp\"
+copy "$(TargetDir)$(TargetName).pdb" "D:\Program files\Winamp\"</PostBuildEvent>
   </PropertyGroup>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.

@@ -69,8 +69,8 @@
       <TargetMachine>MachineX86</TargetMachine>
     </Link>
     <PostBuildEvent>
-      <Command>copy "$(TargetDir)$(TargetFileName)" "C:\Program files\Winamp\Plugins"
-copy "$(TargetDir)$(TargetName).pdb" "C:\Program files\Winamp\Plugins"</Command>
+      <Command>copy "$(TargetDir)$(TargetFileName)" "D:\Program files\Winamp\Plugins"
+copy "$(TargetDir)$(TargetName).pdb" "D:\Program files\Winamp\Plugins"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
