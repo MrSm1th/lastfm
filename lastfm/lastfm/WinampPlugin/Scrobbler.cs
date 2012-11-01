@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading;
 using lastfm.Services;
 using System.Diagnostics;
+using Daniel15.Sharpamp;
 
 namespace lastfm
 {
@@ -18,7 +19,7 @@ namespace lastfm
         ScrobblingSettings Settings;
         //public Queue ScrobbleQueue { get; private set; }
 
-        public Track CurrentTrack { get; private set; }
+        public TrackInfo CurrentTrack { get; private set; }
         public bool IsCurrentTrackScrobbled { get; private set; }
 
         bool IsTimerPaused;
@@ -98,7 +99,7 @@ namespace lastfm
             //System.Windows.Forms.MessageBox.Show(CurrentTrack.ToString(), "Now playing");
         }
 
-        public void SetCurrentTrack(Track t)
+        public void SetCurrentTrack(TrackInfo t)
         {
             CurrentTrack = t;
             Logger.LogMessage("current track reset");

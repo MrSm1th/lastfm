@@ -77,11 +77,11 @@ namespace lastfm
             }
         }
 
-        void Winamp_SongRepeated(object sender, SongInfoEventArgs e)
+        void Winamp_SongRepeated(object sender, TrackInfoEventArgs e)
         {
             //scrobbler.SetCurrentTrack(new Track(e.Song));
             //var msg = string.Format("Repeat:\r\n{0} - {1}", e.Song.Artist, e.Song.Title);
-            var msg = "Repeat? " + e.Song.ToString();  
+            var msg = "Repeat? " + e.Track.ToString();  
             MessageBox.Show(msg, "Winamp Last.fm scrobbler");
         }
 
@@ -102,20 +102,20 @@ namespace lastfm
             //System.Windows.Forms.MessageBox.Show(e.Status.ToString(), "Status");
         }
 
-        void Winamp_SongChanged(object sender, SongInfoEventArgs e)
+        void Winamp_SongChanged(object sender, TrackInfoEventArgs e)
         {
             Logger.WriteEmptyLine();
             Logger.LogMessage("Track changed");
 
             //if (Winamp.Status != Status.Playing) return;
 
-            if (!e.Song.HasMetadata)
+            if (!e.Track.HasMetadata)
             {
-                Logger.LogMessage("No metadata available for playlist entry: " + e.Song.Filename);
+                Logger.LogMessage("No metadata available for playlist entry: " + e.Track.PlaylistTitle);
                 return;
             }
 
-            var track = new Track(e.Song);
+            var track = e.Track;
             //MessageBox.Show(string.Format("Current track: {0} [{1:m':'ss}]", track, track.NaturalDuration));
 
             if (track.Duration > 0)
@@ -125,11 +125,11 @@ namespace lastfm
             }
             else
             {
-                if (!(e.Song.IsRadioStream && !scrobblingSettings.TryToScrobbleRadio))
+                if (!(e.Track.IsRadioStream && !scrobblingSettings.TryToScrobbleRadio))
                 {
                     try
                     {
-                        Track.GetInfoAsync(e.Song.Artist, e.Song.Title, true, (t) =>
+                        Track.GetInfoAsync(e.Track.Artist, e.Track.Title, true, (t) =>
                             {
                                 track = t;
                                 t.IsChosenByUser = false;
@@ -142,12 +142,12 @@ namespace lastfm
                         System.Windows.Forms.MessageBox.Show(ex.Message, "Error");
                     }
                 }
-                else if (e.Song.IsRadioStream && !scrobblingSettings.TryToScrobbleRadio)
+                else if (e.Track.IsRadioStream && !scrobblingSettings.TryToScrobbleRadio)
                     Logger.LogMessage("Radio scrobbling disabled");
             }
         }
 
-        void ShowTrackInfo(Track t)
+        void ShowTrackInfo(TrackInfo t)
         {
             var info = string.Format("{0} - {1}", t.Artist, t.Title);
             Logger.LogMessage(info, "Track data");

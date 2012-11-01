@@ -60,7 +60,7 @@
     <Compile Include="Services\ServiceProxy.cs" />
     <Compile Include="Services\Track.cs" />
     <Compile Include="Sharpamp\GeneralPlugin.cs" />
-    <Compile Include="Sharpamp\Song.cs" />
+    <Compile Include="Sharpamp\TrackInfo.cs" />
     <Compile Include="Sharpamp\Win32.cs" />
     <Compile Include="Sharpamp\Winamp.cs" />
     <Compile Include="Util\Logger.cs" />
@@ -87,8 +87,8 @@
   <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
-    <PostBuildEvent>copy "$(TargetDir)$(TargetFileName)" "D:\Program files\Winamp\"
-copy "$(TargetDir)$(TargetName).pdb" "D:\Program files\Winamp\"</PostBuildEvent>
+    <PostBuildEvent>copy "$(TargetDir)$(TargetFileName)" "%25PROGRAMFILES%25\Winamp\"
+copy "$(TargetDir)$(TargetName).pdb" "%25PROGRAMFILES%25\Winamp\"</PostBuildEvent>
   </PropertyGroup>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.

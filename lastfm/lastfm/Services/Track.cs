@@ -3,13 +3,14 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Xml.Linq;
+using Daniel15.Sharpamp;
 
 namespace lastfm.Services
 {
     public class Track
     {
         [RequestParameters(lastfm.Services.HttpMethod.POST, AuthNeeded = true)]
-        public static void Scrobble(Track t, bool chosenByUser)
+        public static void Scrobble(TrackInfo t, bool chosenByUser)
         {
             var parameters = t.GetParametersDictionary();
             parameters.Add("method", "track.scrobble");
@@ -20,7 +21,7 @@ namespace lastfm.Services
         }
 
         [RequestParameters(lastfm.Services.HttpMethod.POST, AuthNeeded = true)]
-        public static IAsyncResult ScrobbleAsync(Track t, bool chosenByUser)
+        public static IAsyncResult ScrobbleAsync(TrackInfo t, bool chosenByUser)
         {
             var parameters = t.GetParametersDictionary();
             parameters.Add("method", "track.scrobble");
@@ -31,7 +32,7 @@ namespace lastfm.Services
         }
 
         [RequestParameters(lastfm.Services.HttpMethod.POST, AuthNeeded = true)]
-        public static void UpdateNowPlaying(Track t)
+        public static void UpdateNowPlaying(TrackInfo t)
         {
             var parameters = t.GetParametersDictionary();
             parameters.Add("method", "track.updateNowPlaying");
@@ -39,7 +40,7 @@ namespace lastfm.Services
         }
 
         [RequestParameters(lastfm.Services.HttpMethod.POST, AuthNeeded = true)]
-        public static IAsyncResult UpdateNowPlayingAsync(Track t)
+        public static IAsyncResult UpdateNowPlayingAsync(TrackInfo t)
         {
             var parameters = t.GetParametersDictionary();
             parameters.Add("method", "track.updateNowPlaying");
@@ -47,7 +48,7 @@ namespace lastfm.Services
         }
 
         [RequestParameters(lastfm.Services.HttpMethod.POST, AuthNeeded = false)]
-        public static Track GetInfo(string artist, string title, bool autocorrect = false)
+        public static TrackInfo GetInfo(string artist, string title, bool autocorrect = false)
         {
             if (string.IsNullOrEmpty(artist) || string.IsNullOrEmpty(title))
                 throw new ArgumentException("Artist and title can't be empty");
@@ -66,7 +67,7 @@ namespace lastfm.Services
         }
 
         [RequestParameters(lastfm.Services.HttpMethod.POST, AuthNeeded = false)]
-        public static IAsyncResult GetInfoAsync(string artist, string title, bool autocorrect, Action<Track> callback)
+        public static IAsyncResult GetInfoAsync(string artist, string title, bool autocorrect, Action<TrackInfo> callback)
         {
             var parameters = new Dictionary<string, string>()
             {
@@ -84,7 +85,7 @@ namespace lastfm.Services
             });
         }
 
-        static Track ReadInfoFromXDocument(XDocument doc)
+        static TrackInfo ReadInfoFromXDocument(XDocument doc)
         {
             var root       = doc.Element("lfm");
             var track      = root.Element("track");
@@ -96,14 +97,14 @@ namespace lastfm.Services
             if (track.Element("album") != null)
                 album = track.Element("album").Element("title").Value;
 
-            return new Track(corrArtist, corrTitle)
+            return new TrackInfo(corrArtist, corrTitle)
                 {
                     Album = album,
                     Duration = int.Parse(duration),
                     LastFmUrl = url
                 };
         }
-
+        /*
         public Track(string artist, string title)
         {
             Artist = artist;
@@ -111,7 +112,7 @@ namespace lastfm.Services
             IsChosenByUser = true;
         }
 
-        public Track(Daniel15.Sharpamp.WinampSong s)
+        public Track(Daniel15.Sharpamp.TrackInfo s)
         {
             if (string.IsNullOrEmpty(s.Artist) && string.IsNullOrEmpty(s.Title))
                 throw new ArgumentException("Artist and title must not be empty");
@@ -214,5 +215,6 @@ namespace lastfm.Services
         {
             return GetInfoString();
         }
+        */
     }
 }

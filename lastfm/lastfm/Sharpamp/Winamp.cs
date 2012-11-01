@@ -117,12 +117,12 @@ namespace Daniel15.Sharpamp
         /// <summary>
         /// Occurs when the currently playing song has been changed
         /// </summary>
-        public event SongChangedEventHandler SongChanged;
+        public event TrackChangedEventHandler SongChanged;
 
         /// <summary>
         /// Occurs when re-playing current song (damn event is firing twice)
         /// </summary>
-        public event SongRepeatedEventHandler SongRepeated;
+        public event TrackRepeatedEventHandler SongRepeated;
 
         /// <summary>
         /// Occurs when the playing status changes
@@ -132,7 +132,7 @@ namespace Daniel15.Sharpamp
         /// <summary>
         /// Gets the currently playing song
         /// </summary>
-        public WinampSong CurrentSong { get; private set; }
+        public TrackInfo CurrentTrack { get; private set; }
 
         private Status _Status;
         /// <summary>
@@ -199,7 +199,7 @@ namespace Daniel15.Sharpamp
             Logger.LogMessage("hWnd: " + _WinampWindow);
 
             // Start with a blank "currently playing" song
-            CurrentSong = new WinampSong();
+            CurrentTrack = new TrackInfo("", "");
             // Update the song data
             //Logger.Instance.LogMessage("init updateSongData");
             //UpdateSongData();
@@ -250,7 +250,7 @@ namespace Daniel15.Sharpamp
                     // A title notification?
                     if (wParam == IPC_CB_MISC_TITLE)
                     {
-                        UpdateSongData();
+                        UpdateTrackData();
                     }
                     // A status notification?
                     else if (wParam == IPC_CB_MISC_STATUS)
@@ -258,7 +258,7 @@ namespace Daniel15.Sharpamp
                         Status status = (Status)SendIPCCommandInt(IPCCommand.IsPlaying);
                         //Logger.Instance.LogMessage("Status = " + status);
                         string filename = SendIPCCommandString(IPCCommand.GetFilename);
-                        if (status == Status && CurrentSong.Filename == filename)
+                        if (status == Status && CurrentTrack.Filename == filename)
                         {
                             //if (repeatCount == 0) OnSongRepeated(new SongInfoEventArgs(CurrentSong));
                             //else if (repeatCount == 1) repeatCount = 0;
@@ -375,16 +375,12 @@ namespace Daniel15.Sharpamp
         /// <summary>
         /// Update the data about the currently playing song
         /// </summary>
-        private void UpdateSongData()
+        private void UpdateTrackData()
         {
-            // Get the current title
-            //string title = SendIPCCommandString(IPCCommand.GetTitle);
-            // Get
             string filename = SendIPCCommandString(IPCCommand.GetFilename);
             //Logger.Instance.LogMessage("Filename = " + filename);
 
-            // Here's all our data.
-            bool hasMetadata = true, isStream = false;
+            bool hasMetadata = true;
             string playlistTitle = GetMetadata(filename, "title");
             string title = playlistTitle;
             string artist = GetMetadata(filename, "artist");
@@ -394,7 +390,11 @@ namespace Daniel15.Sharpamp
             string num = GetMetadata(filename, "track");
             string bitrate = GetMetadata(filename, "bitrate");
             string vbr = GetMetadata(filename, "vbr");
-            if (string.IsNullOrEmpty(duration)) isStream = true;
+
+            // if winamp can't get bitrate, then user is listening
+            // to a radiostream or a track without an ID3 tag
+            if (string.IsNullOrEmpty(bitrate))
+                hasMetadata = false;
 
             // If the title is blank, we don't have any metadata :(
             // Better just get whatever Winamp gives us as the "title", and save
@@ -402,7 +402,6 @@ namespace Daniel15.Sharpamp
             if (string.IsNullOrEmpty(artist) || string.IsNullOrEmpty(title)) //(String.IsNullOrEmpty(playlistTitle))
             {
                 playlistTitle = SendIPCCommandString(IPCCommand.GetTitle);
-                hasMetadata = false;
             }
 
             // [in case the user is playing a radio stream]
@@ -411,17 +410,14 @@ namespace Daniel15.Sharpamp
             if (b.Length > 0) playlistTitle = playlistTitle.Replace(b.Value, "");
 
             // Only update the data if it's changed
-            /* TODO: This is a hack. What if the title is the same, but the 
-             * artist or album is different? It won't be counted as a change
-             * I need to think of a better way of doing this.
-             */
             //if (CurrentSong.Title == playlistTitle || CurrentSong.StreamTitle == playlistTitle)
-            if ((!filename.Contains("http://") && CurrentSong.Filename == filename) ||
-                (filename.Contains("http://") && CurrentSong.StreamTitle == playlistTitle) ||
+            if ((!filename.Contains("http://") && CurrentTrack.Filename == filename) ||
+                (filename.Contains("http://") && CurrentTrack.PlaylistTitle == playlistTitle) ||
                 playlistTitle.Contains("http://"))
             {
                 return;
             }
+
             // Get all our extra metadata, if we can
             //if (hasMetadata)
             //{
@@ -430,47 +426,46 @@ namespace Daniel15.Sharpamp
             //    album = GetMetadata(filename, "album");
             //    duration = GetMetadata(filename, "length");
             //}
-            if (filename.Contains("http://")) // radio stream
-            {
-                if (!hasMetadata || string.IsNullOrEmpty(title) || string.IsNullOrEmpty(artist))
-                {
-                    var songTitle = playlistTitle;
-                    if (isStream)
-                    {
-                        // strip out text in parentheses at the end of string
-                        // which we believe to be a station name
-                        var streamName = Regex.Match(playlistTitle, @" (((?'Open'\()[^\(\)]*)+((?'Close-Open'\))[^\(\)]*)+)(?(Open)(?!))$");
 
-                        if (!string.IsNullOrEmpty(streamName.Value))
-                        {
-                            songTitle = playlistTitle.Replace(streamName.Value, "");
-                        }
-                    }
-                    if (Regex.IsMatch(songTitle, @".* - .*"))
-                    {
-                        var m = Regex.Match(songTitle, @"(.*) - (.*)");
-                        artist = m.Groups[1].Value;
-                        title = m.Groups[2].Value;
-                        hasMetadata = true;
-                    }
-                }
+            TrackInfo track = null;
+            if (!hasMetadata || string.IsNullOrEmpty(artist) || string.IsNullOrEmpty(title))
+            {
+                track = TrackInfo.ParseFromPlaylistTitle(playlistTitle, hasMetadata);
+                //var songTitle = playlistTitle;
+                //if (isStream)
+                //{
+                //    // strip out text in parentheses (which we believe to be a station name) at the end of string
+                //    var streamName = Regex.Match(playlistTitle, @" (((?'Open'\()[^\(\)]*)+((?'Close-Open'\))[^\(\)]*)+)(?(Open)(?!))$");
+
+                //    if (!string.IsNullOrEmpty(streamName.Value))
+                //    {
+                //        songTitle = playlistTitle.Replace(streamName.Value, "");
+                //    }
+                //}
+                //if (Regex.IsMatch(songTitle, @".* - .*"))
+                //{
+                //    var m = Regex.Match(songTitle, @"(.*) - (.*)");
+                //    artist = m.Groups[1].Value;
+                //    title = m.Groups[2].Value;
+                //    hasMetadata = true;
+                //}
             }
 
-            // Save the new song
-            WinampSong song = new WinampSong{
-                HasMetadata = hasMetadata,
-                Filename = filename,
-                Title = title,
-                Artist = artist,
-                Album = album,
-                Year = year,
-                Duration = duration,    // milliseconds
-                StreamTitle = playlistTitle
-            };
-            CurrentSong = song;
+            long d = 0;
+            long.TryParse(duration, out d);
 
-            // Invoke the "song changed" method
-            OnSongChanged(new SongInfoEventArgs(song));
+            if (track == null)
+                track = new TrackInfo(artist, title) {
+                    HasMetadata = hasMetadata,
+                    Filename = filename,
+                    Album = album,
+                    Year = year,
+                    Duration = d,    // milliseconds
+                    PlaylistTitle = playlistTitle
+                };
+            CurrentTrack = track;
+
+            OnSongChanged(new TrackInfoEventArgs(track));
         }
 
         /// <summary>
@@ -487,19 +482,18 @@ namespace Daniel15.Sharpamp
             data.Filename = filename;
             data.Ret = new string('\0', 256);
             data.RetLen = 256;
-            // Let's fire it off!
             Win32.SendMessage(_WinampWindow, WM_WA_IPC, ref data, (int)IPCCommand.ExtendedFileInfo);
             //Logger.Instance.LogMessage(tag + " = " + data.Ret);
             return data.Ret;
         }
 
-        void OnSongChanged(SongInfoEventArgs e)
+        void OnSongChanged(TrackInfoEventArgs e)
         {
             if (SongChanged != null)
                 SongChanged(this, e);
         }
 
-        void OnSongRepeated(SongInfoEventArgs e)
+        void OnSongRepeated(TrackInfoEventArgs e)
         {
             if (SongRepeated != null)
                 SongRepeated(this, e);
@@ -512,31 +506,31 @@ namespace Daniel15.Sharpamp
     /// </summary>
     /// <param name="sender">Winamp object that sent the event</param>
     /// <param name="e">Arguments for the event</param>
-    public delegate void SongChangedEventHandler(object sender, SongInfoEventArgs e);
+    public delegate void TrackChangedEventHandler(object sender, TrackInfoEventArgs e);
 
     /// <summary>
     /// Represents the method that will handle the SongRepeatedEvent
     /// </summary>
     /// <param name="sender">Winamp object that sent the event</param>
     /// <param name="e">Arguments for the event</param>
-    public delegate void SongRepeatedEventHandler(object sender, SongInfoEventArgs e);
+    public delegate void TrackRepeatedEventHandler(object sender, TrackInfoEventArgs e);
 
     /// <summary>
     /// Provides data for the SongChanged event
     /// </summary>
-    public class SongInfoEventArgs : EventArgs
+    public class TrackInfoEventArgs : EventArgs
     {
         /// <summary>
         /// The song that is currently playing
         /// </summary>
-        public WinampSong Song { get; private set; }
+        public TrackInfo Track { get; private set; }
         /// <summary>
         /// Create a new instance of SongChangedEventArgs for a specified song
         /// </summary>
-        /// <param name="song">The current song</param>
-        public SongInfoEventArgs(WinampSong song)
+        /// <param name="track">The current track</param>
+        public TrackInfoEventArgs(TrackInfo track)
         {
-            Song = song;
+            Track = track;
         }
     }
 
