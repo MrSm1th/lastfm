@@ -32,7 +32,7 @@ namespace Daniel15.Sharpamp
         public static TrackInfo ParseFromPlaylistTitle(string playlistTitle, bool hasMetadata)
         {
             var songTitle = playlistTitle;
-            if (HasFileExtension(playlistTitle) && !hasMetadata) // radio stream
+            if (!HasFileExtension(playlistTitle) && !hasMetadata) // radio stream
             {
                 // strip out text in parentheses (which we believe to be a station name) at the end of string
                 var streamName = Regex.Match(playlistTitle, @" (((?'Open'\()[^\(\)]*)+((?'Close-Open'\))[^\(\)]*)+)(?(Open)(?!))$");
@@ -42,10 +42,10 @@ namespace Daniel15.Sharpamp
                     songTitle = playlistTitle.Replace(streamName.Value, "");
                 }
             }
-            if (Regex.IsMatch(songTitle, @".* - .*"))
+            if (Regex.IsMatch(songTitle, @".+? - .+"))
             {
                 songTitle = StripOutFileExtension(songTitle);
-                var m = Regex.Match(songTitle, @"(.*) - (.*)");
+                var m = Regex.Match(songTitle, @"(.+?) - (.+)");
                 var artist = m.Groups[1].Value;
                 var title = m.Groups[2].Value;
                 return new TrackInfo(artist, title)
@@ -66,10 +66,10 @@ namespace Daniel15.Sharpamp
             var fileExts = string.Join("|", FileExts);
 
             // If a track has no ID3 tag, Winamp shows its filename with extension.
-            if (Regex.IsMatch(playlistTitle, @".*\.[" + fileExts + "]", RegexOptions.IgnoreCase))
-                return false;
+            if (Regex.IsMatch(playlistTitle, @".*\.(" + fileExts + ")", RegexOptions.IgnoreCase))
+                return true;
 
-            return true;
+            return false;
         }
 
         static string StripOutFileExtension(string playlistTitle)
