@@ -12,6 +12,9 @@ namespace lastfm
 {
     public partial class ConfigForm : Form
     {
+        enum AuthStatus { LoggedIn, NotLoggedIn, LoggingIn }
+
+
         ScrobblingSettings settings;
 
         public ConfigForm(ScrobblingSettings s)
@@ -20,7 +23,26 @@ namespace lastfm
 
             settings = s;
             settingsBindingSource.DataSource = s;
-            UpdateAuthStatusText(!string.IsNullOrEmpty(s.SessionKey));
+            UpdateAuthStatusText(!string.IsNullOrEmpty(s.SessionKey) ? AuthStatus.LoggedIn : AuthStatus.NotLoggedIn);
+            LfmServiceProxy.LastfmErrorOccured += HandleAuthError;
+            LfmServiceProxy.NetworkErrorOccured += HandleAuthError;
+            LfmServiceProxy.ErrorOccured += LfmServiceProxy_ErrorOccured;
+        }
+
+        void LfmServiceProxy_ErrorOccured(object sender, LfmServiceProxy.ErrorEventArgs e)
+        {
+            HandleAuthError(e.Error.Message);
+        }
+
+        void HandleAuthError(object sender, LfmServiceProxy.RequestErrorEventArgs e)
+        {
+            HandleAuthError(e.Message);
+        }
+
+        void HandleAuthError(string message)
+        {
+            UpdateAuthStatusText(AuthStatus.NotLoggedIn);
+            var res = MessageBox.Show(message, "Authentication error", MessageBoxButtons.OKCancel);
         }
 
         private void checkBox_unmaskPassword_CheckedChanged(object sender, EventArgs e)
@@ -38,31 +60,40 @@ namespace lastfm
 
             //Auth.Username = username;
             //Auth.Password = password;
-            string sessionKey = string.Empty;
+            //string sessionKey = string.Empty;
             try
             {
-                sessionKey = Auth.Authenticate(username, password);
+                Auth.Authenticate(username, password, (string sessionKey) =>
+                    {
+                        settings.SessionKey = sessionKey;
+                        LfmServiceProxy.SessionKey = sessionKey;
+                        UpdateAuthStatusText(AuthStatus.LoggedIn);
+                    });
             }
             catch (Exception ex)
             {
                 MessageBox.Show(ex.Message, "Error");
             }
-            UpdateAuthStatusText(!string.IsNullOrEmpty(sessionKey));
 
-            settings.SessionKey = sessionKey;
+            UpdateAuthStatusText(AuthStatus.LoggingIn);
         }
 
-        void UpdateAuthStatusText(bool loggedIn)
+        void UpdateAuthStatusText(AuthStatus s)
         {
-            if (loggedIn)
+            if (s == AuthStatus.LoggedIn)
             {
                 label_authStatus.ForeColor = Color.Green;
                 label_authStatus.Text = "Logged in";
             }
+            else if (s == AuthStatus.NotLoggedIn)
+            {
+                label_authStatus.ForeColor = Color.FromArgb(192, 0, 0);
+                label_authStatus.Text = "Not logged in";
+            }
             else
             {
-                label_authStatus.ForeColor = Color.Black;//FromArgb(192, 0, 0);
-                label_authStatus.Text = "Not logged in";
+                label_authStatus.ForeColor = Color.Black;
+                label_authStatus.Text = "Logging in...";
             }
         }
 
@@ -84,6 +115,18 @@ namespace lastfm
             groupBox_scrobbling.Enabled = cb.Checked;
             //cb.Enabled = true;
             //checkBox_scrobbleRadio.Enabled = true;
+        }
+
+        private void button_log_Click(object sender, EventArgs e)
+        {
+            System.Diagnostics.Process.Start(Logger.LogFileName);
+        }
+
+        private void ConfigForm_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            LfmServiceProxy.ErrorOccured -= LfmServiceProxy_ErrorOccured;
+            LfmServiceProxy.LastfmErrorOccured -= HandleAuthError;
+            LfmServiceProxy.NetworkErrorOccured -= HandleAuthError;
         }
     }
 }

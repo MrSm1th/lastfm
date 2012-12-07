@@ -22,7 +22,7 @@ namespace lastfm.Services
             }
         }
 
-        public class SendRequestState
+        class SendRequestState
         {
             public SendRequestDelegate Delegate { get; private set; }
             public Action<XDocument> Callback { get; private set; }
@@ -143,8 +143,8 @@ namespace lastfm.Services
                     var doc = s.Delegate.EndInvoke(res);
                     if (doc != null) // no exceptions occured
                     {
-                        Logger.LogMessage(Environment.NewLine + doc.Document.ToString(), "Last.fm response");
-                        //Logger.LogMessage(doc.Document.ToString());
+                        Logger.LogMessage("Last.fm response OK");
+                        //Logger.LogMessage(Environment.NewLine + doc.Document.ToString(), "Last.fm response");
 
                         if (s.Callback != null)
                             s.Callback(doc);
@@ -287,7 +287,7 @@ namespace lastfm.Services
 
         static string GetSignature(Dictionary<string, string> parameters)
         {
-            var p = new SortedDictionary<string, string>(parameters);
+            var p = new SortedDictionary<string, string>(parameters, StringComparer.Ordinal);
             var str = string.Concat(p.Select(pp => pp.Key + pp.Value).ToArray()) + SharedSecret;
 
             return Util.GetHash(str);
@@ -318,6 +318,8 @@ namespace lastfm.Services
                     var errorCode = error.Attribute("code").Value;
                     var errorValue = error.Value.Trim();
                     Logger.LogError(string.Format("code {0} '{1}'", errorCode, errorValue), "Last.fm error");
+                    requestParameters.Remove("api_key");
+                    requestParameters.Remove("sk");
                     OnLastfmErrorOccured(new RequestErrorEventArgs(errorValue, int.Parse(errorCode), requestParameters));
                     return;
                 }
@@ -330,12 +332,12 @@ namespace lastfm.Services
                     var br = Environment.NewLine;
                     var pStr = requestParameters.Aggregate("", (str, p) => str += string.Format("{0}: {1}{2}", p.Key, p.Value, br));
                     Logger.LogMessage(br + pStr, "Request parameters");
-                    Logger.LogError(ex.ToString());
+                    Logger.LogError(ex.Message);
                 }
             }
             else
             {
-                Logger.LogError(ex.ToString());
+                Logger.LogError(ex.Message);
             }
 
             OnNetworkErrorOccured(new RequestErrorEventArgs(ex.Message));

@@ -15,11 +15,28 @@ namespace lastfm
 
         static string FilePath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + @"\winamp\plugins\scrobbling_settings.ini";
 
+
         public bool ScrobblingEnabled { get; set; }
+
         public int ScrobbleSongtimePercent { get; set; }
-        public bool TryToScrobbleRadio { get; set; }
+
+        /// <summary>
+        /// Gets or sets scrobble time (in minutes) for tracks with unknown duration
+        /// </summary>
+        public int DefaultScrobbleTime { get; set; }
+
+        public bool ScrobbleRadio { get; set; }
+
+        /// <summary>
+        /// Gets or sets value that indicates whether now playing info should be updated in user's profile
+        /// </summary>
         public bool UpdateNowPlaying { get; set; }
+
         public bool DisplayErrorMessages { get; set; }
+
+        /// <summary>
+        /// Gets or sets Last.fm session key
+        /// </summary>
         public string SessionKey { get; set; }
 
         public static ScrobblingSettings GetSettings()
@@ -56,7 +73,7 @@ namespace lastfm
             {
                 ScrobblingEnabled = true,
                 ScrobbleSongtimePercent = 75,
-                TryToScrobbleRadio = false,
+                ScrobbleRadio = false,
                 UpdateNowPlaying = true,
                 DisplayErrorMessages = true
             };
@@ -87,6 +104,18 @@ namespace lastfm
         static bool ConfigFileExists()
         {
             return File.Exists(FilePath);
+        }
+
+        public override string ToString()
+        {
+            var nl = Environment.NewLine;
+            var str = "Scrobbling enabled: " + ScrobblingEnabled + nl
+                    + "Scrobble songtime percent: " + ScrobbleSongtimePercent + nl
+                    + "Default scrobble time: " + DefaultScrobbleTime + nl
+                    + "Scrobble radio: " + ScrobbleRadio + nl
+                    + "Update now playing info: " + UpdateNowPlaying + nl
+                    + "Display error messages: " + DisplayErrorMessages;
+            return str;
         }
     }
 }

@@ -9,8 +9,30 @@ using Daniel15.Sharpamp;
 
 namespace lastfm
 {
+    [Serializable]
+    public class TrackScrobble : IEquatable<TrackScrobble>
+    {
+        public long timestamp;
+        public TrackInfo track;
+
+        public TrackScrobble(long timestamp, TrackInfo track)
+        {
+            this.timestamp = timestamp;
+            this.track = track;
+        }
+
+        public bool Equals(TrackScrobble other)
+        {
+            return object.Equals(this, other);
+        }
+    }
+
     public class Scrobbler
     {
+        List<TrackScrobble> UnscrobbledTracks;
+        string unscrobbledTracksFilename = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + @"\winamp\plugins\UnscrobbledTracks.bin";
+
+
         Timer Timer;
         Timer NowPlayingTimer;
         //DateTime LastChangeTrackTime;
@@ -36,7 +58,7 @@ namespace lastfm
                 {
                     var res = (CurrentTrackScrobbleTime.Value - DateTime.Now).TotalSeconds * 1000;
                     // Timeout.Infinite = -1, pauses the timer;
-                    // values less then -1 cause the timer to throw an ArgumentOutOfRangeException
+                    // values less than -1 cause the timer to throw an ArgumentOutOfRangeException
                     if (res < 0) res = Timeout.Infinite;
                     return res;
                 }
@@ -51,22 +73,32 @@ namespace lastfm
         public Scrobbler(ScrobblingSettings s)
         {
             Settings = s;
+            UnscrobbledTracks = new List<TrackScrobble>();
             Timer = new Timer(t_Elapsed);
             NowPlayingTimer = new Timer(np_Elapsed);
             IsTimerPaused = false;
+            _timeRemainingToScrobble = Timeout.Infinite;
             Logger.LogMessage("Scrobbler initialized. Timer started");
             LfmServiceProxy.SessionKey = Settings.SessionKey;
 
-//            Logger.LogMessage("Scrobbler initialized");
+            DeserializeUnscrobbledTracks();
         }
+
         ~Scrobbler()
         {
-            Timer.Dispose();
+            SerializeUnscrobbledTracks();
         }
 
         void t_Elapsed(object state)
         {
-            Scrobble();
+            try
+            {
+                Scrobble();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex.Message);
+            }
         }
 
         void np_Elapsed(object state)
@@ -76,13 +108,36 @@ namespace lastfm
 
         void Scrobble()
         {
-            //Logger.LogMessage("timer elapsed");
             if (!IsCurrentTrackScrobbled)
             {
-                Track.ScrobbleAsync(CurrentTrack, CurrentTrack.IsChosenByUser);
-                //System.Windows.Forms.MessageBox.Show("Scrobbled:\r\n" + CurrentTrack.ToString(), "Winamp Last.fm scrobbler");
+                var trackScrobble = new TrackScrobble(Util.GetUnixTimestamp(), CurrentTrack);
+                // we add track to this list and in case we get a valid response we'll remove it and try to scrobble remaining tracks (if any)
+                UnscrobbledTracks.Add(trackScrobble);
+                Track.ScrobbleAsync(CurrentTrack, () =>
+                    {
+                        UnscrobbledTracks.Remove(trackScrobble);
+
+                        SendUnscrobbledTracks();
+                    });
                 ResetScrobbler();
                 IsCurrentTrackScrobbled = true;
+            }
+        }
+
+        void SendUnscrobbledTracks()
+        {
+            if (UnscrobbledTracks.Count > 0)
+            {
+                int i = 0;
+                IEnumerable<TrackScrobble> tracks = null;
+                while ((tracks = UnscrobbledTracks.Skip(i).Take(50)).Count() > 0)
+                {
+                    Track.ScrobbleAsync(tracks, (t) =>
+                    {
+                        UnscrobbledTracks = UnscrobbledTracks.Except(t).ToList();
+                    });
+                    i += 50;
+                }
             }
         }
 
@@ -99,21 +154,29 @@ namespace lastfm
             //System.Windows.Forms.MessageBox.Show(CurrentTrack.ToString(), "Now playing");
         }
 
-        public void SetCurrentTrack(TrackInfo t)
+        public void ResetCurrentTrack()
+        {
+            CurrentTrack = null;
+            Timer.Change(Timeout.Infinite, Timeout.Infinite);
+            NowPlayingTimer.Change(Timeout.Infinite, Timeout.Infinite);
+
+        }
+
+        public void ResetCurrentTrack(TrackInfo t)
         {
             CurrentTrack = t;
-            Logger.LogMessage("current track reset");
+            Logger.LogMessage("Current track reset");
 
-            if (t.Duration > 0)
+            if (Settings.ScrobblingEnabled && (t.Duration > 0 || Settings.DefaultScrobbleTime > 0))
             {
-                var trackScrobbleTime = t.Duration / 100 * Settings.ScrobbleSongtimePercent; // [milliseconds]
+                var trackScrobbleTime = (t.Duration <= 0) ?
+                    Settings.DefaultScrobbleTime * 60 * 1000 :
+                    t.Duration / 100 * Settings.ScrobbleSongtimePercent; // [milliseconds]
+
                 if (!IsTimerPaused)
                     CurrentTrackScrobbleTime = DateTime.Now.AddSeconds(trackScrobbleTime / 1000);
                 _timeRemainingToScrobble = trackScrobbleTime;
                 IsCurrentTrackScrobbled = false;
-
-                //IsTimerPaused = false;
-                //LastChangeTrackTime = DateTime.Now;
 
                 // period of Timeout.Infinite means that the callback will be executed only once
                 if (!IsTimerPaused)
@@ -122,27 +185,23 @@ namespace lastfm
             else
             {
                 Timer.Change(Timeout.Infinite, Timeout.Infinite);
-                //CurrentTrack = null;
             }
 
             if (Settings.UpdateNowPlaying && !IsTimerPaused)
-                // update nowPlaying after 10 sec of playback
-                NowPlayingTimer.Change(10000, Timeout.Infinite);
+                // update nowPlaying after 15 sec of playback
+                NowPlayingTimer.Change(15000, Timeout.Infinite);
         }
 
-        //public void ReloadSettings(ScrobblingSettings s)
-        //{
-        //    this.settings = s;
-        //}
+        public void ReloadSettings(ScrobblingSettings s)
+        {
+            this.Settings = s;
+            Logger.LogMessage("Settings reloaded:\n" + s.ToString());
+        }
 
         public void PauseTimer()
         {
             // disable scrobblilg logic if track duration is 0 (last.fm data is often incomplete)
-            //if (CurrentTrack != null)
-            //    Logger.LogMessage(string.Format("{0} - {1} [{2}]", CurrentTrack.Artist, CurrentTrack.Title, CurrentTrack.Duration));
-            //else
-            //    Logger.LogMessage("CurrentTrack == null");
-            if (CurrentTrack.Duration > 0)
+            if (CurrentTrack != null && CurrentTrack.Duration > 0)
             {
                 // "pause" timer
                 Timer.Change(Timeout.Infinite, Timeout.Infinite);
@@ -150,37 +209,26 @@ namespace lastfm
 
                 // calculate time remaining and set the private variable
                 _timeRemainingToScrobble = TimeRemainingToScrobble;
-                //if (TimeRemainingToScrobble < 0)
-                //{
-                //    var msg = "Warning: TimeRemainingToScrobble is less than 0";
-                //    Logger.LogMessage(msg);
-                //    System.Windows.Forms.MessageBox.Show(msg, "Winamp Last.fm scrobbler");
-                //    _timeRemainingToScrobble = 0;
-                //}
 
                 // from now on, TimeRemainingToScrobble will be returning
                 // the same time we set in the previous line
                 IsTimerPaused = true;
-                Logger.LogMessage("timer paused");
-                Logger.LogMessage("TimeRemainingToScrobble = " + TimeRemainingToScrobble.ToString());
+                Logger.LogMessage("Timer paused");
+                Logger.LogMessage("TimeRemainingToScrobble = " + TimeRemainingToScrobble);
             }
         }
 
         public void ResumeTimer()
         {
-            //if (CurrentTrack != null)
-            //    Logger.LogMessage(string.Format("{0} - {1} [{2}]", CurrentTrack.Artist, CurrentTrack.Title, CurrentTrack.Duration));
-            //else
-            //    Logger.LogMessage("CurrentTrack == null"); 
-            if (CurrentTrack.Duration > 0)
+            if (CurrentTrack != null && CurrentTrack.Duration > 0)
             {
                 Timer.Change((int)TimeRemainingToScrobble, Timeout.Infinite);
                 CurrentTrackScrobbleTime = DateTime.Now.AddSeconds(TimeRemainingToScrobble / 1000);
 
-                // TimeRemainingToScrobble will be calculating time automatically
+                // TimeRemainingToScrobble will calculate time automatically
                 IsTimerPaused = false;
-                Logger.LogMessage("timer resumed");
-                Logger.LogMessage("TimeRemainingToScrobble = " + TimeRemainingToScrobble.ToString());
+                Logger.LogMessage("Timer resumed");
+                Logger.LogMessage("TimeRemainingToScrobble = " + TimeRemainingToScrobble);
 
                 if (Settings.UpdateNowPlaying)
                     // update nowPlaying after 10 sec of playback
@@ -190,19 +238,63 @@ namespace lastfm
 
         public void StopTimer()
         {
-            //if (CurrentTrack != null)
-            //    Logger.LogMessage(string.Format("{0} - {1} [{2}]", CurrentTrack.Artist, CurrentTrack.Title, CurrentTrack.Duration));
-            //else
-            //    Logger.LogMessage("CurrentTrack == null");
-            if (CurrentTrack.Duration > 0)
+            if (CurrentTrack != null && CurrentTrack.Duration > 0)
             {
                 Timer.Change(Timeout.Infinite, Timeout.Infinite);
                 NowPlayingTimer.Change(Timeout.Infinite, Timeout.Infinite);
-                // 
+
                 _timeRemainingToScrobble = (double)CurrentTrack.Duration / 100 * Settings.ScrobbleSongtimePercent;
                 IsTimerPaused = true;
-                Logger.LogMessage("timer stopped");
+                Logger.LogMessage("Timer stopped");
                 Logger.LogMessage("TimeRemainingToScrobble = " + TimeRemainingToScrobble.ToString());
+            }
+        }
+
+        public bool SerializeUnscrobbledTracks()
+        {
+            if (UnscrobbledTracks.Count == 0) return true;
+
+            System.IO.Stream s = null;
+            try
+            {
+                var b = new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter();
+                s = System.IO.File.OpenWrite(unscrobbledTracksFilename);
+                b.Serialize(s, UnscrobbledTracks);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex.Message);
+                return false;
+            }
+            finally
+            {
+                if (s != null) s.Dispose();
+            }
+        }
+
+        public bool DeserializeUnscrobbledTracks()
+        {
+            if (!System.IO.File.Exists(unscrobbledTracksFilename)) return true;
+
+            System.IO.Stream s = null;
+            try
+            {
+                s = System.IO.File.OpenRead(unscrobbledTracksFilename);
+                var b = new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter();
+                UnscrobbledTracks = (List<TrackScrobble>) b.Deserialize(s);
+                s.Close();
+                System.IO.File.Delete(unscrobbledTracksFilename);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex.Message);
+                return false;
+            }
+            finally
+            {
+                if (s != null) s.Dispose();
             }
         }
     }

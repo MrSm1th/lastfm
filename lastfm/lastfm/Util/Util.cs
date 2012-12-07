@@ -62,7 +62,7 @@ namespace lastfm.Services
         }
 
         /// <summary>
-        /// Gets the MD5 hash of the input string
+        /// Gets MD5 hash of the input string
         /// </summary>
         public static string GetHash(string input)
         {

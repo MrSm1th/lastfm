@@ -9,7 +9,7 @@ namespace lastfm.Services
 {
     public class Track
     {
-        [RequestParameters(lastfm.Services.HttpMethod.POST, AuthNeeded = true)]
+        [RequestParameters(HttpMethod.POST, AuthNeeded = true)]
         public static void Scrobble(TrackInfo t, bool chosenByUser)
         {
             var parameters = t.GetParametersDictionary();
@@ -20,18 +20,55 @@ namespace lastfm.Services
             var resp = LfmServiceProxy.GetResponse(parameters);
         }
 
-        [RequestParameters(lastfm.Services.HttpMethod.POST, AuthNeeded = true)]
-        public static IAsyncResult ScrobbleAsync(TrackInfo t, bool chosenByUser)
+        [RequestParameters(HttpMethod.POST, AuthNeeded = true)]
+        public static IAsyncResult ScrobbleAsync(TrackInfo t, Action callback)
         {
             var parameters = t.GetParametersDictionary();
             parameters.Add("method", "track.scrobble");
             parameters.Add("timestamp", Util.GetUnixTimestamp().ToString());
-            if (!chosenByUser) parameters.Add("chosenByUser", "0");
 
-            return LfmServiceProxy.GetResponseAsync(parameters, null);
+            return LfmServiceProxy.GetResponseAsync(parameters, (doc) =>
+                {
+                    if (callback != null)
+                        callback();
+                });
         }
 
-        [RequestParameters(lastfm.Services.HttpMethod.POST, AuthNeeded = true)]
+        [RequestParameters(HttpMethod.POST, AuthNeeded=true)]
+        public static IAsyncResult ScrobbleAsync(IEnumerable<TrackScrobble> tracks, Action<IEnumerable<TrackScrobble>> callback)
+        {
+            if (tracks.Count() > 50) throw new ArgumentException("Last.fm supports a maximum of 50 tracks");
+            if (tracks.Count() == 0) return null;
+
+            var parameters = new Dictionary<string, string>();
+            parameters.Add("method", "track.scrobble");
+
+            var i = 0;
+            foreach (var trackScrobble in tracks)
+            {
+                var tp = trackScrobble.track.GetParametersDictionary(i);
+                foreach (var p in tp)
+                {
+                    parameters.Add(p.Key, p.Value);
+                }
+                parameters.Add("timestamp[" + i + "]", trackScrobble.timestamp.ToString());
+                i++;
+            }
+
+            return LfmServiceProxy.GetResponseAsync(parameters, (doc) =>
+            {
+                if (callback != null)
+                    callback(tracks);
+
+                var info = doc.Element("lfm").Element("scrobbles");
+                var acc = info.Attribute("accepted").Value;
+                var rej = info.Attribute("ignored").Value;
+
+                Logger.LogMessage(string.Format("Batch scrobble info: accepted {0} tracks, ignored {1} tracks", acc, rej));
+            });
+        }
+
+        [RequestParameters(HttpMethod.POST, AuthNeeded = true)]
         public static void UpdateNowPlaying(TrackInfo t)
         {
             var parameters = t.GetParametersDictionary();
@@ -39,7 +76,7 @@ namespace lastfm.Services
             var resp = LfmServiceProxy.GetResponse(parameters);
         }
 
-        [RequestParameters(lastfm.Services.HttpMethod.POST, AuthNeeded = true)]
+        [RequestParameters(HttpMethod.POST, AuthNeeded = true)]
         public static IAsyncResult UpdateNowPlayingAsync(TrackInfo t)
         {
             var parameters = t.GetParametersDictionary();
@@ -47,7 +84,7 @@ namespace lastfm.Services
             return LfmServiceProxy.GetResponseAsync(parameters, null);
         }
 
-        [RequestParameters(lastfm.Services.HttpMethod.POST, AuthNeeded = false)]
+        [RequestParameters(HttpMethod.POST, AuthNeeded = false)]
         public static TrackInfo GetInfo(string artist, string title, bool autocorrect = false)
         {
             if (string.IsNullOrEmpty(artist) || string.IsNullOrEmpty(title))
@@ -66,7 +103,7 @@ namespace lastfm.Services
             return ReadInfoFromXDocument(res);
         }
 
-        [RequestParameters(lastfm.Services.HttpMethod.POST, AuthNeeded = false)]
+        [RequestParameters(HttpMethod.POST, AuthNeeded = false)]
         public static IAsyncResult GetInfoAsync(string artist, string title, bool autocorrect, Action<TrackInfo> callback)
         {
             var parameters = new Dictionary<string, string>()
@@ -104,117 +141,5 @@ namespace lastfm.Services
                     LastFmUrl = url
                 };
         }
-        /*
-        public Track(string artist, string title)
-        {
-            Artist = artist;
-            Title = title;
-            IsChosenByUser = true;
-        }
-
-        public Track(Daniel15.Sharpamp.TrackInfo s)
-        {
-            if (string.IsNullOrEmpty(s.Artist) && string.IsNullOrEmpty(s.Title))
-                throw new ArgumentException("Artist and title must not be empty");
-
-            Artist = s.Artist;
-            Title = s.Title;
-            Duration = 0;
-            if (!string.IsNullOrEmpty(s.Duration)) long.TryParse(s.Duration, out _duration);
-            Album = s.Album;
-            Year = s.Year;
-            IsChosenByUser = !s.IsRadioStream;
-        }
-
-        /// <summary>
-        /// Gets the track artist
-        /// </summary>
-        public string Artist { get; private set; }
-
-        /// <summary>
-        /// Gets the track title
-        /// </summary>
-        public string Title { get; private set; }
-
-        /// <summary>
-        /// Gets or sets the track album
-        /// </summary>
-        public string Album { get; set; }
-
-        /// <summary>
-        /// Gets or sets the track release year
-        /// </summary>
-        public string Year { get; set; }
-
-        /// <summary>
-        /// Gets or sets the track duration in milliseconds
-        /// </summary>
-        public long Duration { get { return _duration; } set { _duration = value; } }
-        long _duration;
-
-        /// <summary>
-        /// Gets or sets the track ordinal in album (if any)
-        /// </summary>
-        public int TrackNumber { get; set; }
-
-        public string AlbumArtist { get; set; }
-
-        /// <summary>
-        /// Determines whether the track was chosen by user or not (for example radio stream)
-        /// </summary>
-        public bool IsChosenByUser { get; set; }
-
-        /// <summary>
-        /// Gets a link to the Last.fm page of the track
-        /// </summary>
-        public string LastFmUrl { get; private set; }
-
-        public TimeSpan NaturalDuration
-        {
-            get
-            {
-                return new TimeSpan(Duration * 10000);
-            }
-        }
-
-        public Dictionary<string, string> GetParametersDictionary()
-        {
-            var res = new Dictionary<string, string>()
-            {
-                { "artist", Artist },
-                { "track", Title }
-            };
-
-            if (!string.IsNullOrEmpty(Album)) res.Add("album", Album);
-
-            if (!string.IsNullOrEmpty(Year)) res.Add("year", Year);
-
-            if (Duration > 0) res.Add("duration", (Duration / 1000).ToString());
-
-            return res;
-        }
-
-        public string GetInfoString(bool includeAlbum = false,
-                              bool includeDuration = false,
-                              bool includeYear = false,
-                              bool includeTrackNumber = false,
-                              bool includeAlbumArtist = false)
-        {
-            var br = Environment.NewLine;
-            var info = string.Format("{0} - {1}", Artist, Title);
-            if (includeAlbum) info += br + "Album: " + Album;
-            if (includeDuration) info += br + "Duration: " + Duration.ToString();
-            if (includeYear) info += br + "Year: " + Year;
-            if (includeAlbumArtist) info += br + "Album artist: " + AlbumArtist;
-            if (includeTrackNumber) info += br + "Track number: " + TrackNumber.ToString();
-
-            return info;
-        }
-
-        public override string ToString()
-        {
-            return GetInfoString();
-        }
-        */
     }
 }

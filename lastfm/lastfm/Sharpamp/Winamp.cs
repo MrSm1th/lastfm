@@ -392,9 +392,9 @@ namespace Daniel15.Sharpamp
             string vbr = GetMetadata(filename, "vbr");
 
             // if winamp can't get bitrate, then user is listening
-            // to a radiostream or a track without an ID3 tag
-            if (string.IsNullOrEmpty(bitrate))
-                hasMetadata = false;
+            // to a radiostream or a track without an ID3 tag [UPD: ...or a .cue-file with the cue-player plug-in]
+            //if (string.IsNullOrEmpty(bitrate))
+            //    hasMetadata = false;
 
             // If the title is blank, we don't have any metadata :(
             // Better just get whatever Winamp gives us as the "title", and save
@@ -406,8 +406,7 @@ namespace Daniel15.Sharpamp
 
             // [in case the user is playing a radio stream]
             // strip out the '[Buffer: XX%]' substring from the title before we compare it with the current title
-            var b = Regex.Match(playlistTitle, @"\[Buffer: \d{1,2}%\] ");
-            if (b.Length > 0) playlistTitle = playlistTitle.Replace(b.Value, "");
+            playlistTitle = Regex.Replace(playlistTitle, @"\[Buffer: \d{1,2}%\] ", "", RegexOptions.IgnoreCase);
 
             // Only update the data if it's changed
             //if (CurrentSong.Title == playlistTitle || CurrentSong.StreamTitle == playlistTitle)
@@ -418,53 +417,29 @@ namespace Daniel15.Sharpamp
                 return;
             }
 
-            // Get all our extra metadata, if we can
-            //if (hasMetadata)
-            //{
-            //    artist = GetMetadata(filename, "artist");
-            //    year = GetMetadata(filename, "year");
-            //    album = GetMetadata(filename, "album");
-            //    duration = GetMetadata(filename, "length");
-            //}
-
-            TrackInfo track = null;
-            if (!hasMetadata || string.IsNullOrEmpty(artist) || string.IsNullOrEmpty(title))
-            {
-                track = TrackInfo.ParseFromPlaylistTitle(playlistTitle, hasMetadata);
-                //var songTitle = playlistTitle;
-                //if (isStream)
-                //{
-                //    // strip out text in parentheses (which we believe to be a station name) at the end of string
-                //    var streamName = Regex.Match(playlistTitle, @" (((?'Open'\()[^\(\)]*)+((?'Close-Open'\))[^\(\)]*)+)(?(Open)(?!))$");
-
-                //    if (!string.IsNullOrEmpty(streamName.Value))
-                //    {
-                //        songTitle = playlistTitle.Replace(streamName.Value, "");
-                //    }
-                //}
-                //if (Regex.IsMatch(songTitle, @".* - .*"))
-                //{
-                //    var m = Regex.Match(songTitle, @"(.*) - (.*)");
-                //    artist = m.Groups[1].Value;
-                //    title = m.Groups[2].Value;
-                //    hasMetadata = true;
-                //}
-            }
-
             long d = 0;
             long.TryParse(duration, out d);
 
-            if (track == null)
-                track = new TrackInfo(artist, title) {
-                    HasMetadata = hasMetadata,
-                    Filename = filename,
-                    Album = album,
-                    Year = year,
-                    Duration = d,    // milliseconds
-                    PlaylistTitle = playlistTitle
-                };
-            CurrentTrack = track;
+            if (string.IsNullOrEmpty(artist) || string.IsNullOrEmpty(title))
+            {
+                hasMetadata = false;
+            }
 
+            var track =  new TrackInfo(artist, title) {
+                Album = album,
+                Year = year,
+                Duration = d,    // milliseconds
+                Filename = filename,
+                PlaylistTitle = playlistTitle,
+                HasMetadata = hasMetadata
+            };
+
+            if (string.IsNullOrEmpty(artist) || string.IsNullOrEmpty(title))
+            {
+                TrackInfo.TryParseFromPlaylistTitle(playlistTitle, hasMetadata, ref track);
+            }
+
+            CurrentTrack = track;
             OnSongChanged(new TrackInfoEventArgs(track));
         }
 

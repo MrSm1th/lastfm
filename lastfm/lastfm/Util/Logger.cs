@@ -8,17 +8,19 @@ namespace lastfm
 {
     public static class Logger
     {
+        public static string LogFileName { get; private set; }
         static Logger()
         {
             // Let's set up debugging, if we're in debug mode!
             #if DEBUG
             string debugDir = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-            string debugFile = System.IO.Path.Combine(debugDir, "winamp-cs-debug.txt");
+            LogFileName = System.IO.Path.Combine(debugDir, "winamp-cs-debug.txt");
 
             var t = new DefaultTraceListener()
             {
-                LogFileName = debugFile
+                LogFileName = LogFileName
             };
+            Trace.Listeners.Clear();
             Trace.Listeners.Add(t);
             #endif
         }

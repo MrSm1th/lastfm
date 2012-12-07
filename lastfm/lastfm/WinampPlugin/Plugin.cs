@@ -33,11 +33,15 @@ namespace lastfm
 
             SetEventHandlers();
 
-            Logger.LogMessage("plugin initialized");
+            Logger.LogMessage("Plugin initialized");
         }
 
         public override void Config()
         {
+            LfmServiceProxy.NetworkErrorOccured -= LfmServiceProxy_NetworkErrorOccured;
+            LfmServiceProxy.LastfmErrorOccured -= LfmServiceProxy_LastfmErrorOccured;
+            LfmServiceProxy.ErrorOccured -= LfmServiceProxy_ErrorOccured;
+
             var f = new ConfigForm(scrobblingSettings);
             f.Show();
             f.FormClosed += f_FormClosed;
@@ -45,7 +49,7 @@ namespace lastfm
 
         void f_FormClosed(object sender, FormClosedEventArgs e)
         {
-            scrobbler = new Scrobbler(scrobblingSettings);
+            scrobbler.ReloadSettings(scrobblingSettings);
             SetEventHandlers();
             //(sender as Form).FormClosed -= f_FormClosed;
         }
@@ -57,10 +61,11 @@ namespace lastfm
             Winamp.StatusChanged -= Winamp_StatusChanged;
             LfmServiceProxy.NetworkErrorOccured -= LfmServiceProxy_NetworkErrorOccured;
             LfmServiceProxy.LastfmErrorOccured -= LfmServiceProxy_LastfmErrorOccured;
+            LfmServiceProxy.ErrorOccured -= LfmServiceProxy_ErrorOccured;
 
             eventsSubscribed = false;
 
-            if (scrobblingSettings.ScrobblingEnabled && scrobbler.IsLoggedIn && !eventsSubscribed)
+            if (scrobbler.IsLoggedIn && !eventsSubscribed)
             {
                 Winamp.SongChanged += Winamp_SongChanged;
                 Winamp.SongRepeated += Winamp_SongRepeated;
@@ -70,7 +75,7 @@ namespace lastfm
                 {
                     LfmServiceProxy.NetworkErrorOccured += LfmServiceProxy_NetworkErrorOccured;
                     LfmServiceProxy.LastfmErrorOccured += LfmServiceProxy_LastfmErrorOccured;
-                    LfmServiceProxy.ErrorOccured += new LfmServiceProxy.ErrorEventHandler(LfmServiceProxy_ErrorOccured);
+                    LfmServiceProxy.ErrorOccured += LfmServiceProxy_ErrorOccured;
                 }
 
                 eventsSubscribed = true;
@@ -111,50 +116,38 @@ namespace lastfm
 
             if (!e.Track.HasMetadata)
             {
-                Logger.LogMessage("No metadata available for playlist entry: " + e.Track.PlaylistTitle);
+                Logger.LogMessage("No metadata available for playlist entry: " + e.Track);
                 return;
             }
 
             var track = e.Track;
             //MessageBox.Show(string.Format("Current track: {0} [{1:m':'ss}]", track, track.NaturalDuration));
 
-            if (track.Duration > 0)
+            if (track.Duration <= 0)
             {
-                ShowTrackInfo(track);
-                scrobbler.SetCurrentTrack(track);
+                Track.GetInfoAsync(e.Track.Artist, e.Track.Title, true, (t) =>
+                {
+                    t.Filename = track.Filename;
+                    track = t;
+                    //t.IsChosenByUser = false;
+                    LogTrackInfo(track);
+                    if (!(e.Track.IsRadioStream && !scrobblingSettings.ScrobbleRadio))
+                    {
+                        scrobbler.ResetCurrentTrack(track);
+                    }
+                });
             }
             else
             {
-                if (!(e.Track.IsRadioStream && !scrobblingSettings.TryToScrobbleRadio))
-                {
-                    try
-                    {
-                        Track.GetInfoAsync(e.Track.Artist, e.Track.Title, true, (t) =>
-                            {
-                                track = t;
-                                t.IsChosenByUser = false;
-                                ShowTrackInfo(t);
-                                scrobbler.SetCurrentTrack(t);
-                            });
-                    }
-                    catch (Exception ex)
-                    {
-                        System.Windows.Forms.MessageBox.Show(ex.Message, "Error");
-                    }
-                }
-                else if (e.Track.IsRadioStream && !scrobblingSettings.TryToScrobbleRadio)
-                    Logger.LogMessage("Radio scrobbling disabled");
+                LogTrackInfo(track);
+                scrobbler.ResetCurrentTrack(track);
             }
         }
 
-        void ShowTrackInfo(TrackInfo t)
+        void LogTrackInfo(TrackInfo t)
         {
-            var info = string.Format("{0} - {1}", t.Artist, t.Title);
+            var info = t.GetInfoString(includeDuration: true, includeChosenByUser: true);
             Logger.LogMessage(info, "Track data");
-            info += string.Format("\nDuration: {0}", t.Duration);
-            info += string.Format("\nAlbum: {0}", t.Album);
-            info += string.Format("\nYear: {0}", t.Year);
-            //info += Environment.NewLine + string.Format("time: {0}ms", time);
             //System.Windows.Forms.MessageBox.Show(info, "Song info");
         }
 
@@ -162,8 +155,6 @@ namespace lastfm
         {
             if (e.LastfmErrorCode == 6 && (e.Message.Contains("Artist not found") || e.Message.Contains("Track not found")))
             {
-                //var trackInfo = string.Format("{0} - {1}", e.RequestParameters["artist"], e.RequestParameters["track"]);
-                //Logger.LogError(e.Message + ": " + trackInfo);
                 return;
             }
             var msg = e.Message + Environment.NewLine + "Press 'Cancel' to disable further notifications";
@@ -190,6 +181,9 @@ namespace lastfm
             {
                 LfmServiceProxy.NetworkErrorOccured -= LfmServiceProxy_NetworkErrorOccured;
                 LfmServiceProxy.LastfmErrorOccured -= LfmServiceProxy_LastfmErrorOccured;
+                LfmServiceProxy.ErrorOccured -= LfmServiceProxy_ErrorOccured;
+                scrobblingSettings.DisplayErrorMessages = false;
+                scrobblingSettings.SaveToFile();
             }
         }
     }
